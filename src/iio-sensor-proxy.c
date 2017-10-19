@@ -45,6 +45,9 @@ typedef struct {
 
 	/* Accelerometer */
 	OrientationUp previous_orientation;
+	int previous_accel_x;
+	int previous_accel_y;
+	int previous_accel_z;
 
 	/* Light */
 	gdouble previous_level;
@@ -258,6 +261,27 @@ send_dbus_event (SensorData     *data,
 }
 
 static void
+send_dbus_signal (SensorData *data)
+{
+	GVariant *accel;
+
+	g_assert (data->connection);
+
+	accel = g_variant_new ("(iiix)",
+			       data->previous_accel_x,
+			       data->previous_accel_y,
+			       data->previous_accel_z,
+			       g_get_real_time());
+
+	g_dbus_connection_emit_signal (data->connection,
+				       NULL,
+				       SENSOR_PROXY_DBUS_PATH,
+				       "net.hadess.SensorProxy",
+				       "AccelerometerRawUpdated",
+				       accel, NULL);
+}
+
+static void
 send_driver_changed_dbus_event (SensorData   *data,
 				DriverType    driver_type)
 {
@@ -303,9 +327,11 @@ client_release (SensorData            *data,
 
 	g_hash_table_remove (ht, sender);
 
-	if (driver_type_exists (data, driver_type) &&
-	    g_hash_table_size (ht) == 0)
-		driver_set_polling (DRIVER_FOR_TYPE(driver_type), FALSE);
+	if (driver_type_exists (data, driver_type)) {
+		driver_set_poll_interval (DRIVER_FOR_TYPE(driver_type), DRIVER_POLL_INTERVAL_NORMAL);
+	 	if (g_hash_table_size (ht) == 0)
+			driver_set_polling (DRIVER_FOR_TYPE(driver_type), FALSE);
+	}
 }
 
 static void
@@ -362,10 +388,14 @@ handle_generic_method_call (SensorData            *data,
 			return;
 		}
 
-		/* No other clients for this sensor? Start it */
-		if (driver_type_exists (data, driver_type) &&
-		    g_hash_table_size (ht) == 0)
-			driver_set_polling (DRIVER_FOR_TYPE(driver_type), TRUE);
+		if (driver_type_exists (data, driver_type)) {
+			if (g_str_has_suffix (method_name, "Raw")) {
+				driver_set_poll_interval (DRIVER_FOR_TYPE(driver_type), DRIVER_POLL_INTERVAL_HIGH);
+			}
+			/* No other clients for this sensor? Start it */
+			if (g_hash_table_size (ht) == 0)
+				driver_set_polling (DRIVER_FOR_TYPE(driver_type), TRUE);
+		}
 
 		watch_id = g_bus_watch_name_on_connection (data->connection,
 							   sender,
@@ -397,7 +427,9 @@ handle_method_call (GDBusConnection       *connection,
 	DriverType driver_type;
 
 	if (g_strcmp0 (method_name, "ClaimAccelerometer") == 0 ||
-	    g_strcmp0 (method_name, "ReleaseAccelerometer") == 0)
+	    g_strcmp0 (method_name, "ReleaseAccelerometer") == 0 ||
+	    g_strcmp0 (method_name, "ClaimAccelerometerRaw") == 0 ||
+	    g_strcmp0 (method_name, "ReleaseAccelerometerRaw") == 0)
 		driver_type = DRIVER_TYPE_ACCEL;
 	else if (g_strcmp0 (method_name, "ClaimLight") == 0 ||
 		 g_strcmp0 (method_name, "ReleaseLight") == 0)
@@ -626,10 +658,23 @@ accel_changed_func (SensorDriver *driver,
 
 		tmp = data->previous_orientation;
 		data->previous_orientation = orientation;
+
 		send_dbus_event (data, PROP_ACCELEROMETER_ORIENTATION);
 		g_debug ("Emitted orientation changed: from %s to %s",
 			 orientation_to_string (tmp),
 			 orientation_to_string (data->previous_orientation));
+
+		data->previous_accel_x = readings->accel_x;
+		data->previous_accel_y = readings->accel_y;
+		data->previous_accel_z = readings->accel_z;
+
+		send_dbus_signal (data);
+	} else if (data->previous_accel_x != readings->accel_x || data->previous_accel_y != readings->accel_y || data->previous_accel_z != readings->accel_z) {
+		data->previous_accel_x = readings->accel_x;
+		data->previous_accel_y = readings->accel_y;
+		data->previous_accel_z = readings->accel_z;
+
+		send_dbus_signal (data);
 	}
 }
 

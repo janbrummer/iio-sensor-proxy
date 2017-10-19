@@ -70,6 +70,23 @@ properties_changed (GDBusProxy *proxy,
 }
 
 static void
+signal_called (GDBusProxy *proxy,
+		    gchar     *sender_name,
+		    gchar     *signal_name,
+		    GVariant  *parameters,
+		    gpointer   user_data)
+{
+	gint x, y, z;
+	gint64 time;
+
+	if (g_strcmp0(signal_name, "AccelerometerRawUpdated"))
+		return;
+
+	g_variant_get (parameters, "(iiix)", &x, &y, &z, &time);
+	g_print ("    Accelerometer raw changed: x=%d/y=%d/z=%d time=%ld\n", x, y, z, time);
+}
+
+static void
 print_initial_values (void)
 {
 	GVariant *v;
@@ -142,6 +159,9 @@ appeared_cb (GDBusConnection *connection,
 	g_signal_connect (G_OBJECT (iio_proxy), "g-properties-changed",
 			  G_CALLBACK (properties_changed), NULL);
 
+	g_signal_connect (G_OBJECT (iio_proxy), "g-signal",
+			  G_CALLBACK (signal_called), NULL);
+
 	if (g_strcmp0 (g_get_user_name (), "geoclue") == 0) {
 		iio_proxy_compass = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
 								   G_DBUS_PROXY_FLAGS_NONE,
@@ -156,13 +176,22 @@ appeared_cb (GDBusConnection *connection,
 	}
 
 	/* Accelerometer */
-	g_dbus_proxy_call_sync (iio_proxy,
+	/*g_dbus_proxy_call_sync (iio_proxy,
 				"ClaimAccelerometer",
 				NULL,
 				G_DBUS_CALL_FLAGS_NONE,
 				-1,
 				NULL, &error);
+	g_assert_no_error (error);*/
+
+	g_dbus_proxy_call_sync (iio_proxy,
+				"ClaimAccelerometerRaw",
+				NULL,
+				G_DBUS_CALL_FLAGS_NONE,
+				-1,
+				NULL, &error);
 	g_assert_no_error (error);
+
 
 	/* ALS */
 	g_dbus_proxy_call_sync (iio_proxy,

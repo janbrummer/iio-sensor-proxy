@@ -34,6 +34,11 @@ typedef enum {
   DRIVER_TYPE_COMPASS_FAKE
 } DriverTypeCompass;
 
+typedef enum {
+	DRIVER_POLL_INTERVAL_NORMAL,
+	DRIVER_POLL_INTERVAL_HIGH
+} DriverPollInterval;
+
 typedef struct SensorDriver SensorDriver;
 
 typedef struct {
@@ -60,13 +65,15 @@ struct SensorDriver {
 	const char             *name;
 	DriverType              type;
 	DriverSpecificType      specific_type;
+	int                     raw_count;
 
-	gboolean (*discover)    (GUdevDevice        *device);
-	gboolean (*open)        (GUdevDevice        *device,
-			         ReadingsUpdateFunc  callback_func,
-			         gpointer            user_data);
-	void     (*set_polling) (gboolean            state);
-	void     (*close)       (void);
+	gboolean (*discover)          (GUdevDevice        *device);
+	gboolean (*open)              (GUdevDevice        *device,
+				       ReadingsUpdateFunc  callback_func,
+				       gpointer            user_data);
+	void     (*set_polling)       (gboolean            state);
+	void     (*set_poll_interval) (DriverPollInterval  interval);
+	void     (*close)             (void);
 };
 
 static inline gboolean
@@ -104,6 +111,18 @@ driver_set_polling (SensorDriver *driver,
 		return;
 
 	driver->set_polling (state);
+}
+
+static inline void
+driver_set_poll_interval (SensorDriver       *driver,
+			  DriverPollInterval  interval)
+{
+	g_return_if_fail (driver);
+
+	if (!driver->set_poll_interval)
+		return;
+
+	driver->set_poll_interval (interval);
 }
 
 static inline void

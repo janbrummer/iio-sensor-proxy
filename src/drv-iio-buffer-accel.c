@@ -20,6 +20,7 @@ typedef struct {
 	ReadingsUpdateFunc callback_func;
 	gpointer           user_data;
 
+	guint poll_interval;
 	GUdevDevice *dev;
 	const char *dev_path;
 	const char *name;
@@ -189,8 +190,30 @@ iio_buffer_accel_set_polling (gboolean state)
 	}
 
 	if (state) {
-		drv_data->timeout_id = g_timeout_add (700, read_orientation, drv_data);
+		drv_data->timeout_id = g_timeout_add (drv_data->poll_interval, read_orientation, drv_data);
 		g_source_set_name_by_id (drv_data->timeout_id, "[iio_buffer_accel_set_polling] read_orientation");
+	}
+}
+
+static void
+iio_buffer_accel_set_poll_interval (DriverPollInterval interval)
+{
+	switch (interval) {
+	case DRIVER_POLL_INTERVAL_NORMAL:
+		drv_data->poll_interval = 700;
+		break;
+	case DRIVER_POLL_INTERVAL_HIGH:
+		drv_data->poll_interval = 16;
+		break;
+	default:
+		return;
+	}
+	g_debug ("Set buffer accel poll interval to %d", drv_data->poll_interval);
+
+	/* In case polling is running, restart with new interval */
+	if (drv_data->timeout_id > 0) {
+		iio_buffer_accel_set_polling (FALSE);
+		iio_buffer_accel_set_polling (TRUE);
 	}
 }
 
@@ -225,6 +248,8 @@ iio_buffer_accel_open (GUdevDevice        *device,
 		parse_mount_matrix (NULL, &drv_data->mount_matrix);
 	}
 
+	drv_data->poll_interval = 700;
+
 	drv_data->dev = g_object_ref (device);
 	drv_data->dev_path = g_udev_device_get_device_file (device);
 	drv_data->name = g_udev_device_get_property (device, "NAME");
@@ -255,5 +280,6 @@ SensorDriver iio_buffer_accel = {
 	.discover = iio_buffer_accel_discover,
 	.open = iio_buffer_accel_open,
 	.set_polling = iio_buffer_accel_set_polling,
+	.set_poll_interval = iio_buffer_accel_set_poll_interval,
 	.close = iio_buffer_accel_close,
 };

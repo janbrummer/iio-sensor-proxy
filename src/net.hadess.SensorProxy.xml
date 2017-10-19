@@ -92,6 +92,33 @@
     <method name="ReleaseAccelerometer"/>
 
     <!--
+       ClaimAccelerometerRaw:
+
+       To start receiving accelerometer with raw data reading updates from the proxy, the application
+       must call the net.hadess.SensorProxy.ClaimAccelerometerRaw() method. It can do so
+       whether an accelerometer is available or not, updates would then be sent when an
+       accelerometer appears.
+
+       Applications should call net.hadess.SensorProxy.ReleaseAccelerometerRaw() when
+       readings are not required anymore. For example, an application that monitors
+       the orientation of the main screen should stop monitoring for updates when that
+       screen has been turned off.
+
+       This prevents the sensor proxy from polling the device, thus increasing wake-ups
+       and reducing battery life.
+    -->
+    <method name="ClaimAccelerometerRaw"/>
+
+    <!--
+        ReleaseAccelerometerRaw:
+
+        This should be called as soon as readings are not required anymore. Note
+        that resources are freed up if a monitoring application exits without
+        calling net.hadess.SensorProxy.ReleaseAccelerometerRaw(), crashes or the sensor disappears.
+    -->
+    <method name="ReleaseAccelerometerRaw"/>
+
+    <!--
        ClaimLight:
 
        To start receiving ambient light sensor reading updates from the proxy, the
@@ -117,6 +144,13 @@
         calling net.hadess.SensorProxy.ReleaseLight(), crashes or the sensor disappears.
     -->
     <method name="ReleaseLight"/>
+
+    <signal name="AccelerometerRawUpdated">
+      <arg type="i" name="accel_x" direction="out"/>
+      <arg type="i" name="accel_y" direction="out"/>
+      <arg type="i" name="accel_z" direction="out"/>
+      <arg type="x" name="timestamp" direction="out"/>
+    </signal>
   </interface>
 
   <!--
